@@ -5,7 +5,8 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '',
   headers: { 'Content-Type': 'application/json' },
-  timeout: 60_000,
+  // AI analysis/generation can take longer than a regular API request.
+  timeout: 180_000,
 });
 
 export const analyzeTopic = async (topic: string, projectId?: number) => (await api.post('/api/analyze/', { topic, project_id: projectId })).data;

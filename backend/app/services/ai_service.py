@@ -13,24 +13,19 @@ class AIService:
         self.api_key = os.getenv("AI_API_KEY")
 
         # Primary model from .env
-        self.model = os.getenv("AI_MODEL", "gemini-3.7-flash")
+        self.model = os.getenv("AI_MODEL", "gemini-2.5-flash")
 
         self.base_url = os.getenv(
             "AI_BASE_URL",
             "https://generativelanguage.googleapis.com/v1beta/openai/"
         )
 
-        # Fallback models
-        self.fallback_models = [
-            self.model,
-            "gemini-3.6-flash",
-            "gemini-3.5-flash",
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-        ]
-
-        # Remove duplicates while preserving order
-        self.fallback_models = list(dict.fromkeys(self.fallback_models))
+        # Keep fallback attempts bounded so browser requests do not expire first.
+        fallback_models = os.getenv("AI_FALLBACK_MODELS", "gemini-2.5-flash-lite")
+        self.fallback_models = list(dict.fromkeys(
+            [self.model] + [model.strip() for model in fallback_models.split(",") if model.strip()]
+        ))[:2]
+        self.request_timeout = float(os.getenv("AI_REQUEST_TIMEOUT", "75"))
 
         if not self.api_key:
             raise ValueError("AI_API_KEY environment variable is required")
@@ -40,144 +35,72 @@ class AIService:
         prompt: str,
         system_prompt: str = None
     ) -> Dict[str, Any]:
-        """
-        Send a request to Gemini with retry and model fallback.
-        """
-
+        """Request a structured response, with one bounded fallback model."""
         messages = []
-
         if system_prompt:
-            messages.append({
-                "role": "system",
-                "content": system_prompt
-            })
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
 
-        messages.append({
-            "role": "user",
-            "content": prompt
-        })
-
-        last_error = None
+        last_error = "No AI models were configured"
+        endpoint = f"{self.base_url.rstrip('/')}/chat/completions"
+        timeout = httpx.Timeout(self.request_timeout, connect=10.0)
 
         for model in self.fallback_models:
-
             payload = {
                 "model": model,
                 "messages": messages,
                 "temperature": 0.7,
-                "max_tokens": 4000
+                "max_tokens": 4000,
             }
-
-            # Try each model up to 2 times
-            for attempt in range(2):
-
-                try:
-                    print(
-                        f"AI request: model={model}, "
-                        f"attempt={attempt + 1}"
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(
+                        endpoint,
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
                     )
 
-                    async with httpx.AsyncClient(timeout=45.0) as client:
-
-                        response = await client.post(
-                            f"{self.base_url}chat/completions",
-                            headers={
-                                "Authorization": f"Bearer {self.api_key}",
-                                "Content-Type": "application/json"
-                            },
-                            json=payload
-                        )
-
-                    # Temporary server-side errors
-                    if response.status_code in [429, 500, 502, 503, 504]:
-
-                        print(
-                            f"Model {model} returned "
-                            f"{response.status_code}"
-                        )
-
-                        last_error = (
-                            f"AI service error "
-                            f"{response.status_code}: "
-                            f"{response.text}"
-                        )
-
-                        # Wait before retrying
-                        if attempt == 0:
-                            await asyncio.sleep(2)
-                            continue
-
-                        # Move to next model
-                        break
-
-                    response.raise_for_status()
-
-                    result = response.json()
-
-                    # Make sure Gemini returned content
-                    if not result.get("choices"):
-                        raise Exception(
-                            "AI returned no choices in response"
-                        )
-
-                    message = result["choices"][0].get("message", {})
-                    content = message.get("content")
-
-                    if not content:
-                        raise Exception(
-                            "AI returned empty content"
-                        )
-
-                    print(f"AI request successful using {model}")
-
-                    return self._parse_response(content)
-
-                except httpx.TimeoutException:
-                    last_error = "AI service timeout"
-
-                    print(
-                        f"Timeout with {model}, "
-                        f"attempt {attempt + 1}"
+                if response.status_code in {401, 403}:
+                    raise ValueError(
+                        "AI provider rejected the API key (HTTP "
+                        f"{response.status_code}). Check AI_API_KEY in backend/.env."
                     )
-
-                    if attempt == 0:
-                        await asyncio.sleep(2)
-                        continue
-
-                    break
-
-                except httpx.HTTPStatusError as e:
-
+                if response.status_code >= 400:
                     last_error = (
-                        f"AI service error "
-                        f"{e.response.status_code}: "
-                        f"{e.response.text}"
+                        f"Model {model} returned HTTP {response.status_code}: "
+                        f"{response.text[:500]}"
                     )
+                    # Invalid credentials or request format won't be fixed by another model.
+                    if response.status_code in {400, 413, 422}:
+                        break
+                    continue
 
-                    print(last_error)
+                result = response.json()
+                choices = result.get("choices") or []
+                content = choices[0].get("message", {}).get("content") if choices else None
+                if not content:
+                    last_error = f"Model {model} returned an empty response"
+                    continue
+                return self._parse_response(content)
 
-                    if attempt == 0:
-                        await asyncio.sleep(2)
-                        continue
+            except httpx.TimeoutException:
+                last_error = (
+                    f"Model {model} did not respond within "
+                    f"{self.request_timeout:g} seconds"
+                )
+            except httpx.RequestError as exc:
+                last_error = f"Could not reach the AI provider: {exc}"
+            except ValueError:
+                raise
+            except Exception as exc:
+                last_error = f"AI request failed for model {model}: {exc}"
 
-                    break
-
-                except Exception as e:
-
-                    last_error = f"AI service failed: {str(e)}"
-
-                    print(last_error)
-
-                    # Don't immediately abandon the request
-                    if attempt == 0:
-                        await asyncio.sleep(1)
-                        continue
-
-                    break
-
-        # Every model failed
-        raise Exception(
-            f"All AI models failed. Last error: {last_error}"
+        raise RuntimeError(
+            f"AI request failed after trying {len(self.fallback_models)} model(s). "
+            f"{last_error} Verify AI_API_KEY, AI_MODEL, and AI_BASE_URL in backend/.env."
         )
 
     def _parse_response(self, content: str) -> Dict[str, Any]:
