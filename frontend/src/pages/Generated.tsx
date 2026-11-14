@@ -10,7 +10,6 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useGeneration } from '@/hooks/useGeneration';
 import { useProjects } from '@/hooks/useProjects';
-import { GeneratedContent } from '@/types';
 import {
   Copy,
   RefreshCw,
@@ -26,21 +25,14 @@ import {
 export const Generated = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const { content, loading, error, generate, reset } = useGeneration();
-  const { fetchProject, currentProject } = useProjects();
+  const { content, loading, error, generate, loadLatest } = useGeneration();
+  const { projects, fetchProjects, loading: projectsLoading, error: projectsError } = useProjects();
   const [activeTab, setActiveTab] = useState('titles');
 
   useEffect(() => {
-    if (projectId) {
-      fetchProject(parseInt(projectId));
-    }
-  }, [projectId, fetchProject]);
-
-  useEffect(() => {
-    if (projectId && currentProject) {
-      generate(parseInt(projectId));
-    }
-  }, [projectId, currentProject, generate]);
+    if (projectId && Number.isInteger(Number(projectId))) loadLatest(Number(projectId));
+    else if (!projectId) fetchProjects();
+  }, [projectId, loadLatest, fetchProjects]);
 
   const handleRegenerate = () => {
     if (projectId) {
@@ -56,27 +48,21 @@ export const Generated = () => {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">Generated Content</h1>
-        <ErrorState message={error} onRetry={() => projectId && generate(parseInt(projectId))} />
+        <ErrorState message={error} onRetry={() => projectId && loadLatest(Number(projectId))} />
       </div>
     );
   }
 
+  if (!projectId && !loading) {
+    return <div className="space-y-6"><div><h1 className="text-2xl font-bold">Generated Content</h1><p className="mt-1 text-sm text-muted-foreground">Choose a project to view its latest generated content.</p></div>{projectsLoading ? <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div> : projectsError ? <ErrorState message={projectsError} onRetry={() => fetchProjects()} /> : projects.length ? <div className="grid gap-4 md:grid-cols-2">{projects.map(project => <Card key={project.id}><CardHeader><CardTitle>{project.topic}</CardTitle></CardHeader><CardContent><p className="mb-4 text-sm text-muted-foreground">{project.summary || 'No summary available.'}</p><Button onClick={() => navigate(`/generated/${project.id}`)}>View content</Button></CardContent></Card>)}</div> : <EmptyState icon={BookOpen} title="No projects yet" description="Create a topic analysis first, then generate content." action={<Button onClick={() => navigate('/new')}>Create a project</Button>} />}</div>;
+  }
+
+  if (projectId && (!Number.isInteger(Number(projectId)) || Number(projectId) < 1)) {
+    return <EmptyState icon={BookOpen} title="Project not found" description="The project ID in this link is invalid." action={<Button onClick={() => navigate('/generated')}>Browse projects</Button>} />;
+  }
+
   if (!content && !loading) {
-    return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Generated Content</h1>
-        <EmptyState
-          icon={BookOpen}
-          title="No content generated"
-          description="Analyze a topic first to generate content."
-          action={
-            <Button onClick={() => navigate('/')}>
-              Go to Home
-            </Button>
-          }
-        />
-      </div>
-    );
+    return <div className="space-y-4"><h1 className="text-2xl font-bold">Generated Content</h1><EmptyState icon={BookOpen} title="No content generated yet" description="Generate a content package for this project to see it here." action={<Button onClick={() => generate(Number(projectId))}>Generate content</Button>} /></div>;
   }
 
   return (

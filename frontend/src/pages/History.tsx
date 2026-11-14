@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, Search, Filter, Trash2, Copy, Bookmark, ChevronRight } from 'lucide-react';
+import { Clock, Search, Trash2, Copy, Bookmark, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { useProjects } from '@/hooks/useProjects';
 import { Project } from '@/types';
 
@@ -13,7 +14,7 @@ export const History = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
-  const { projects, fetchProjects, removeProject, toggleSave, loading } = useProjects();
+  const { projects, fetchProjects, removeProject, toggleSave, loading, error } = useProjects();
 
   useEffect(() => {
     fetchProjects();
@@ -88,7 +89,9 @@ export const History = () => {
       </div>
 
       {/* Projects List */}
-      {loading ? (
+      {error ? (
+        <ErrorState message={error} onRetry={() => fetchProjects()} />
+      ) : loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
@@ -111,7 +114,7 @@ export const History = () => {
                   <div className="flex-1">
                     <h3 className="font-semibold">{project.topic}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {project.summary?.slice(0, 100)}...
+                      {project.summary ? `${project.summary.slice(0, 100)}${project.summary.length > 100 ? '…' : ''}` : 'No summary available.'}
                     </p>
                     <div className="mt-2 flex items-center gap-3">
                       <Badge variant="outline" className="capitalize">
@@ -120,7 +123,7 @@ export const History = () => {
                       <Badge variant="secondary" className="capitalize">
                         {project.best_format?.replace('_', ' ')}
                       </Badge>
-                      {project.viral_potential_score && (
+                      {project.viral_potential_score != null && (
                         <span className="text-xs text-muted-foreground">
                           Viral: {project.viral_potential_score}/100
                         </span>
@@ -146,7 +149,7 @@ export const History = () => {
                         toggleSave(project.id);
                       }}
                     >
-                      <Bookmark className="h-4 w-4" />
+                      <Bookmark className={`h-4 w-4 ${project.is_saved ? 'fill-current text-primary' : ''}`} />
                     </Button>
                     <Button
                       variant="ghost"

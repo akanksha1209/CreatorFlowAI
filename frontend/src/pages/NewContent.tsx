@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,8 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { LoadingStages } from '@/components/ui/LoadingStages';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useAnalysis } from '@/hooks/useAnalysis';
-import { useProjects } from '@/hooks/useProjects';
-import { analyzeTopic } from '@/services/api';
+
 
 export const NewContent = () => {
   const navigate = useNavigate();
@@ -18,11 +17,12 @@ export const NewContent = () => {
   
   const [topic, setTopic] = useState(initialTopic);
   const { analysis, loading, error, analyze, reset } = useAnalysis();
-  const { addProject } = useProjects();
   const [currentStage, setCurrentStage] = useState(0);
+  const autoAnalyzed = useRef(false);
 
   useEffect(() => {
-    if (initialTopic) {
+    if (initialTopic && !autoAnalyzed.current) {
+      autoAnalyzed.current = true;
       handleAnalyze(initialTopic);
     }
   }, []);
@@ -49,35 +49,8 @@ export const NewContent = () => {
     await handleAnalyze(topic);
   };
 
-  const handleSaveProject = async () => {
-    if (analysis) {
-      const projectData = {
-        topic: analysis.topic,
-        summary: analysis.summary,
-        content_intent: analysis.content_intent,
-        target_audience: analysis.target_audience,
-        audience_reasoning: analysis.audience_reasoning,
-        best_platform: analysis.best_platform,
-        platform_reasoning: analysis.platform_reasoning,
-        best_format: analysis.best_format,
-        format_reasoning: analysis.format_reasoning,
-        topic_potential: analysis.topic_potential,
-        viral_potential_score: analysis.viral_potential_score,
-        viral_potential_reasoning: analysis.viral_potential_reasoning,
-        trend_relevance: analysis.trend_relevance,
-        trend_reasoning: analysis.trend_reasoning,
-        competition_level: analysis.competition_level,
-        content_gap: analysis.content_gap,
-        differentiation_strategy: analysis.differentiation_strategy,
-        recommended_tone: analysis.recommended_tone,
-        recommended_length: analysis.recommended_length,
-        key_points: analysis.key_points,
-        things_to_avoid: analysis.things_to_avoid,
-      };
-      
-      await addProject(projectData);
-      navigate(`/analysis/${analysis.topic}`);
-    }
+  const handleSaveProject = () => {
+    if (analysis?.id) navigate(`/analysis/${analysis.id}`);
   };
 
   const handleNewAnalysis = () => {
@@ -147,7 +120,7 @@ export const NewContent = () => {
                 New Analysis
               </Button>
               <Button onClick={handleSaveProject}>
-                Save Project
+                Open Project
               </Button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { sendChatMessage } from '@/services/api';
+import { getProjectHistory, sendChatMessage } from '@/services/api';
 import { ChatMessage } from '@/types';
 
 interface UseChatReturn {
@@ -7,6 +7,7 @@ interface UseChatReturn {
   loading: boolean;
   error: string | null;
   sendMessage: (projectId: number, message: string, context?: any) => Promise<void>;
+  loadMessages: (projectId: number) => Promise<void>;
   reset: () => void;
 }
 
@@ -45,11 +46,24 @@ export const useChat = (): UseChatReturn => {
     }
   }, []);
 
+  const loadMessages = useCallback(async (projectId: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const history = await getProjectHistory(projectId);
+      setMessages(history.chat_messages || []);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || err.message || 'Failed to load chat history.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const reset = useCallback(() => {
     setMessages([]);
     setError(null);
     setLoading(false);
   }, []);
 
-  return { messages, loading, error, sendMessage, reset };
+  return { messages, loading, error, sendMessage, loadMessages, reset };
 };

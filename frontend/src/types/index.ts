@@ -1,4 +1,5 @@
 export interface TopicAnalysis {
+  id: number;
   topic: string;
   summary: string;
   content_intent: string;
@@ -76,6 +77,7 @@ export interface Project {
   things_to_avoid?: string[];
   created_at: string;
   updated_at?: string;
+  is_saved?: boolean;
 }
 
 export interface ProjectVersion {

@@ -38,16 +38,22 @@ import {
 export const Analysis = () => {
   const navigate = useNavigate();
   const { projectId } = useParams();
-  const { analysis, loading, error, analyze, reset } = useAnalysis();
+  const { analysis: sessionAnalysis, loading, error, analyze } = useAnalysis();
   const { content, loading: generating, generate } = useGeneration();
-  const { fetchProject, currentProject } = useProjects();
+  const { projects, fetchProjects, fetchProject, currentProject, error: projectError, loading: projectLoading } = useProjects();
+  const analysis = projectId
+    ? (currentProject?.id === Number(projectId) ? currentProject : null)
+    : currentProject || sessionAnalysis;
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     if (projectId) {
-      fetchProject(parseInt(projectId));
+      const id = Number(projectId);
+      if (Number.isInteger(id) && id > 0) fetchProject(id);
+    } else {
+      fetchProjects();
     }
-  }, [projectId, fetchProject]);
+  }, [projectId, fetchProject, fetchProjects]);
 
   const handleAnalyze = async (topic: string) => {
     await analyze(topic);
@@ -55,7 +61,8 @@ export const Analysis = () => {
 
   const handleGenerate = async () => {
     if (currentProject) {
-      await generate(currentProject.id);
+      const result = await generate(currentProject.id);
+      if (result) navigate(`/generated/${currentProject.id}`);
     }
   };
 
@@ -63,35 +70,34 @@ export const Analysis = () => {
     navigator.clipboard.writeText(text);
   };
 
-  const handleRegenerate = () => {
-    if (analysis) {
-      analyze(analysis.topic);
-    }
+  const handleRegenerate = async () => {
+    if (!analysis?.topic) return;
+    const result = await analyze(analysis.topic, currentProject?.id);
+    if (result && currentProject) await fetchProject(currentProject.id);
   };
 
-  if (error) {
+  if (error || projectError) {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">Analysis</h1>
-        <ErrorState message={error} onRetry={() => analyze(analysis?.topic || '')} />
+        <ErrorState message={error || projectError || 'Unable to load this project.'} onRetry={() => projectId ? fetchProject(Number(projectId)) : fetchProjects()} />
       </div>
     );
   }
 
-  if (!analysis && !loading) {
+  if (projectId && (!Number.isInteger(Number(projectId)) || Number(projectId) < 1)) {
+    return <EmptyState icon={Brain} title="Project not found" description="The project ID in this link is invalid." action={<Button onClick={() => navigate('/analysis')}>Browse projects</Button>} />;
+  }
+
+  if (projectId && !analysis && projectLoading) {
+    return <div className="flex justify-center py-16"><LoadingSpinner size="lg" /></div>;
+  }
+
+  if (!analysis && !loading && !projectId) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Content Analysis</h1>
-        <EmptyState
-          icon={Brain}
-          title="No analysis yet"
-          description="Enter a topic on the home page to get started with AI-powered content analysis."
-          action={
-            <Button onClick={() => navigate('/')}>
-              Go to Home
-            </Button>
-          }
-        />
+      <div className="space-y-6">
+        <div><h1 className="text-2xl font-bold">Content Analysis</h1><p className="mt-1 text-sm text-muted-foreground">Choose a saved topic or start a fresh analysis.</p></div>
+        {projectLoading ? <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div> : projects.length ? <div className="grid gap-4 md:grid-cols-2">{projects.map(project => <Card key={project.id}><CardHeader><CardTitle>{project.topic}</CardTitle></CardHeader><CardContent><p className="mb-4 text-sm text-muted-foreground">{project.summary || 'No summary yet'}</p><Button onClick={() => navigate(`/analysis/${project.id}`)}>Open analysis</Button></CardContent></Card>)}</div> : <EmptyState icon={Brain} title="No analysis yet" description="Enter a topic to create your first content strategy." action={<Button onClick={() => navigate('/')}>Go to Home</Button>} />}
       </div>
     );
   }
@@ -201,7 +207,7 @@ export const Analysis = () => {
             </CardHeader>
             <CardContent>
               <ul className="space-y-2">
-                {analysis.key_points.map((point, index) => (
+                {(analysis.key_points || []).map((point, index) => (
                   <li key={index} className="flex items-start gap-2">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-500" />
                     <span className="text-sm">{point}</span>
@@ -217,7 +223,7 @@ export const Analysis = () => {
             </CardHeader>
             <CardContent>
               <ul className="space-y-2">
-                {analysis.things_to_avoid.map((thing, index) => (
+                {(analysis.things_to_avoid || []).map((thing, index) => (
                   <li key={index} className="flex items-start gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 text-red-500" />
                     <span className="text-sm">{thing}</span>
@@ -235,7 +241,7 @@ export const Analysis = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-6">
-                <ScoreIndicator score={analysis.viral_potential_score} size="lg" />
+                <ScoreIndicator score={analysis.viral_potential_score ?? 0} size="lg" />
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground">
                     {analysis.viral_potential_reasoning}

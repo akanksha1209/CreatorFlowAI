@@ -4,8 +4,10 @@ from app.models.project import ContentIntent, Platform, FormatType
 
 class TopicAnalysisRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
+    project_id: Optional[int] = None
 
 class TopicAnalysisResponse(BaseModel):
+    id: int
     topic: str
     summary: str
     content_intent: ContentIntent

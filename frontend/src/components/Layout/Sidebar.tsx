@@ -26,7 +26,7 @@ export const Sidebar = () => {
   const location = useLocation();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:block">
       <div className="flex h-16 items-center gap-2 px-6">
         <Sparkles className="h-6 w-6 text-primary" />
         <span className="text-lg font-bold">CreatorFlow AI</span>
@@ -35,7 +35,7 @@ export const Sidebar = () => {
       <nav className="mt-8 px-3">
         <ul className="space-y-1">
           {navigation.map((item) => {
-            const isActive = location.pathname === item.href;
+            const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(`${item.href}/`));
             return (
               <li key={item.name}>
                 <Link

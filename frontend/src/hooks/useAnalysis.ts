@@ -6,7 +6,7 @@ interface UseAnalysisReturn {
   analysis: TopicAnalysis | null;
   loading: boolean;
   error: string | null;
-  analyze: (topic: string) => Promise<void>;
+  analyze: (topic: string, projectId?: number) => Promise<TopicAnalysis | null>;
   reset: () => void;
 }
 
@@ -15,14 +15,16 @@ export const useAnalysis = (): UseAnalysisReturn => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const analyze = useCallback(async (topic: string) => {
+  const analyze = useCallback(async (topic: string, projectId?: number) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await analyzeTopic(topic);
+      const result: TopicAnalysis = await analyzeTopic(topic, projectId);
       setAnalysis(result);
+      return result;
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Analysis failed. Please try again.');
+      setError(err.response?.data?.detail || err.message || 'Analysis failed. Please try again.');
+      return null;
     } finally {
       setLoading(false);
     }

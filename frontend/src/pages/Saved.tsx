@@ -1,27 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bookmark, Trash2, ChevronRight } from 'lucide-react';
+import { Bookmark, BookmarkX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { useProjects } from '@/hooks/useProjects';
-import { Project } from '@/types';
 
 export const Saved = () => {
   const navigate = useNavigate();
-  const { projects, fetchProjects, removeProject, toggleSave, loading } = useProjects();
+  const { projects, fetchProjects, toggleSave, loading, error } = useProjects();
 
   useEffect(() => {
-    fetchProjects();
+    fetchProjects(undefined, true);
   }, [fetchProjects]);
 
-  const savedProjects = projects.filter((p) => p.id); // All projects are "saved" in this implementation
+  const savedProjects = projects;
 
-  const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this project?')) {
-      await removeProject(id);
-    }
+  const handleUnsave = async (id: number) => {
+    await toggleSave(id);
+    await fetchProjects(undefined, true);
   };
 
   const formatDate = (dateString: string) => {
@@ -36,7 +35,9 @@ export const Saved = () => {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Saved Projects</h1>
 
-      {loading ? (
+      {error ? (
+        <ErrorState message={error} onRetry={() => fetchProjects(undefined, true)} />
+      ) : loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
@@ -62,10 +63,10 @@ export const Saved = () => {
                     size="icon"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(project.id);
+                      handleUnsave(project.id);
                     }}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <BookmarkX className="h-4 w-4" />
                   </Button>
                 </div>
               </CardHeader>

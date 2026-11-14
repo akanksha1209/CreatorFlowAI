@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
-from app.models.project import ContentIntent, Platform, FormatType
+import json
 from datetime import datetime
+from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from app.models.project import ContentIntent, Platform, FormatType
+
 
 class ProjectBase(BaseModel):
     topic: str
@@ -26,8 +28,20 @@ class ProjectBase(BaseModel):
     key_points: Optional[list] = None
     things_to_avoid: Optional[list] = None
 
+    @field_validator("key_points", "things_to_avoid", mode="before")
+    @classmethod
+    def decode_json_lists(cls, value):
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return []
+        return value
+
+
 class ProjectCreate(ProjectBase):
     pass
+
 
 class ProjectUpdate(BaseModel):
     topic: Optional[str] = None
@@ -52,13 +66,14 @@ class ProjectUpdate(BaseModel):
     key_points: Optional[list] = None
     things_to_avoid: Optional[list] = None
 
+
 class ProjectResponse(ProjectBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
-    class Config:
-        from_attributes = True
+    is_saved: bool = False
+    model_config = ConfigDict(from_attributes=True)
+
 
 class ProjectListResponse(BaseModel):
     projects: List[ProjectResponse]

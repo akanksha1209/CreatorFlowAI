@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
-import { generateContent } from '@/services/api';
+import { generateContent, getProjectHistory } from '@/services/api';
 import { GeneratedContent } from '@/types';
 
 interface UseGenerationReturn {
   content: GeneratedContent | null;
   loading: boolean;
   error: string | null;
-  generate: (projectId: number, regenerateAll?: boolean, specificSections?: string[]) => Promise<void>;
+  generate: (projectId: number, regenerateAll?: boolean, specificSections?: string[]) => Promise<GeneratedContent | null>;
+  loadLatest: (projectId: number) => Promise<void>;
   reset: () => void;
 }
 
@@ -19,10 +20,27 @@ export const useGeneration = (): UseGenerationReturn => {
     setLoading(true);
     setError(null);
     try {
-      const result = await generateContent(projectId, regenerateAll, specificSections);
+      const result: GeneratedContent = await generateContent(projectId, regenerateAll, specificSections);
       setContent(result);
+      return result;
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Generation failed. Please try again.');
+      setError(err.response?.data?.detail || err.message || 'Generation failed. Please try again.');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadLatest = useCallback(async (projectId: number) => {
+    setContent(null);
+    setLoading(true);
+    setError(null);
+    try {
+      const history = await getProjectHistory(projectId);
+      const latest = history.versions?.[0];
+      setContent(latest ? { ...latest, project_id: projectId } : null);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || err.message || 'Failed to load generated content.');
     } finally {
       setLoading(false);
     }
@@ -34,5 +52,5 @@ export const useGeneration = (): UseGenerationReturn => {
     setLoading(false);
   }, []);
 
-  return { content, loading, error, generate, reset };
+  return { content, loading, error, generate, loadLatest, reset };
 };

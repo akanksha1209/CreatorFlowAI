@@ -8,7 +8,7 @@ interface UseProjectsReturn {
   projectHistory: ProjectHistory | null;
   loading: boolean;
   error: string | null;
-  fetchProjects: (search?: string) => Promise<void>;
+  fetchProjects: (search?: string, savedOnly?: boolean) => Promise<void>;
   fetchProject: (id: number) => Promise<void>;
   fetchProjectHistory: (id: number) => Promise<void>;
   addProject: (data: any) => Promise<void>;
@@ -25,11 +25,11 @@ export const useProjects = (): UseProjectsReturn => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProjects = useCallback(async (search?: string) => {
+  const fetchProjects = useCallback(async (search?: string, savedOnly = false) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getProjects(0, 50, search);
+      const result = await getProjects(0, 100, search, savedOnly);
       setProjects(result.projects);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to fetch projects');
@@ -113,14 +113,13 @@ export const useProjects = (): UseProjectsReturn => {
     setError(null);
     try {
       const result = await saveProject(id);
-      // Refresh project to get updated saved status
-      await fetchProject(id);
+      setProjects(prev => prev.map(project => project.id === id ? { ...project, is_saved: result.is_saved } : project));
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save project');
     } finally {
       setLoading(false);
     }
-  }, [fetchProject]);
+  }, []);
 
   const reset = useCallback(() => {
     setCurrentProject(null);

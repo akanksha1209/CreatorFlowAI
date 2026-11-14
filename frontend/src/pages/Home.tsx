@@ -48,7 +48,7 @@ export const Home = () => {
   };
 
   const handleViewResults = () => {
-    navigate('/analysis');
+    if (analysis?.id) navigate(`/analysis/${analysis.id}`);
   };
 
   return (
